@@ -465,7 +465,6 @@ def render_sidebar():
     """Render sidebar with navigation and info"""
     with st.sidebar:
         # Assuming you have an image at "assets/my_logo.png"
-        # If not, you can comment out or delete the next line
         st.image("assets/my_logo.png", use_container_width=True)
         
         st.markdown("---")
@@ -498,9 +497,9 @@ def render_sidebar():
         st.markdown("---")
         
         # Help section
-        with st.expander("ℹ️ About XLMERGE"):
+        with st.expander("ℹ️ About CONSO2B"):
             st.markdown("""
-            **XLMERGE** consolidates GSTR 2B data from multiple files into one.
+            **CONSO2B** consolidates GSTR 2B data from multiple files into one.
             
             **Features:**
             - Smart header detection
@@ -526,7 +525,7 @@ def render_sidebar():
             Click **`🔄 Start Consolidation`**. After processing, select the specific columns you want in your final report.
 
             **4. Download Your Report:**
-            Choose your export format. By default, data is combined into a single sheet. To create separate worksheets for each original sheet name, check the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
+            Choose your export format. To create separate worksheets for each original sheet name, check the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
             """)
         
         # Creators Section
@@ -576,12 +575,7 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # Reset button
-        if st.button("🔄 Reset All", type="secondary", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            init_session_state()
-            st.rerun()
+       
 
 # ============================================================================
 # PAGE 1: UPLOAD FILES
@@ -1118,6 +1112,7 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
 
 
