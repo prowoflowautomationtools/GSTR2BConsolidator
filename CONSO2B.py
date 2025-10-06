@@ -432,7 +432,7 @@ def export_to_csv(df: pd.DataFrame) -> str:
 def render_sidebar():
     """Render sidebar with navigation and info"""
     with st.sidebar:
-        st.image("assets/my_logo.png", use_container_width=True)
+        #st.image("assets/my_logo.png", use_container_width=True)
         
         st.markdown("---")
         
@@ -932,3 +932,4 @@ def main():
 # ============================================================================
 if __name__ == "__main__":
     main()
+
