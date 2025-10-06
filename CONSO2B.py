@@ -485,7 +485,7 @@ def render_sidebar():
             Click **`🔄 Start Consolidation`**. After processing, select the specific columns you want in your final report.
 
             **4. Download Your Report:**
-            Choose your export format. By default, data is combined into a single sheet. To create separate worksheets for each original sheet name, check the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
+            Choose your export format. By default, data is split into separate worksheets. To combine all data into a single sheet, untick the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
             """)
         
         with st.expander("👥 Creators"):
@@ -932,6 +932,7 @@ def main():
 # ============================================================================
 if __name__ == "__main__":
     main()
+
 
 
 
