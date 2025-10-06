@@ -464,7 +464,7 @@ def export_to_csv(df: pd.DataFrame) -> str:
 def render_sidebar():
     """Render sidebar with navigation and info"""
     with st.sidebar:
-        st.image("assets/my_logo.png", use_container_width=True)
+        #st.image("assets/my_logo.png", use_container_width=True)
         
         st.markdown("---")
         
@@ -496,9 +496,9 @@ def render_sidebar():
         st.markdown("---")
         
         # Help section
-        with st.expander("ℹ️ About XLMERGE"):
+        with st.expander("ℹ️ About CONSO2B"):
             st.markdown("""
-            **XLMERGE** consolidates GSTR 2B data from multiple files into one.
+            **CONSO2B** consolidates GSTR 2B data from multiple files into one.
             
             **Features:**
             - Smart header detection
@@ -507,7 +507,7 @@ def render_sidebar():
             - Flexible export options
             
             **Supported Formats:**
-            - Excel (.xls, .xlsx, .xlsm, .xlsb)
+            - Excel (.xls, .xlsx,)
             - CSV (.csv)
             """)
 
@@ -1116,4 +1116,5 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
