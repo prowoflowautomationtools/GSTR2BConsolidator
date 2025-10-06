@@ -464,7 +464,9 @@ def export_to_csv(df: pd.DataFrame) -> str:
 def render_sidebar():
     """Render sidebar with navigation and info"""
     with st.sidebar:
-        #st.image("assets/my_logo.png", use_container_width=True)
+        # Assuming you have an image at "assets/my_logo.png"
+        # If not, you can comment out or delete the next line
+        st.image("assets/my_logo.png", use_container_width=True)
         
         st.markdown("---")
         
@@ -496,9 +498,9 @@ def render_sidebar():
         st.markdown("---")
         
         # Help section
-        with st.expander("ℹ️ About CONSO2B"):
+        with st.expander("ℹ️ About XLMERGE"):
             st.markdown("""
-            **CONSO2B** consolidates GSTR 2B data from multiple files into one.
+            **XLMERGE** consolidates GSTR 2B data from multiple files into one.
             
             **Features:**
             - Smart header detection
@@ -507,11 +509,11 @@ def render_sidebar():
             - Flexible export options
             
             **Supported Formats:**
-            - Excel (.xls, .xlsx,)
+            - Excel (.xls, .xlsx, .xlsm, .xlsb)
             - CSV (.csv)
             """)
 
-        # --- NEW USER GUIDE SECTION ---
+        # User Guide Section
         with st.expander("📖 User Guide"):
             st.markdown("""
             **1. Upload Files:**
@@ -527,7 +529,7 @@ def render_sidebar():
             Choose your export format. By default, data is combined into a single sheet. To create separate worksheets for each original sheet name, check the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
             """)
         
-        # --- NEW CREATORS SECTION ---
+        # Creators Section
         with st.expander("👥 Creators"):
             st.markdown("""
             - **Created by:** Nandeesh B
@@ -536,8 +538,8 @@ def render_sidebar():
 
         st.markdown("---")
         
-        # Reset button
-        if st.button("🔄 Reset All", type="secondary", use_container_width=True):
+        # Reset button with a unique key
+        if st.button("🔄 Reset All", type="secondary", use_container_width=True, key="reset_all_sidebar"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             init_session_state()
@@ -1116,5 +1118,6 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
 
