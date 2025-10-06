@@ -464,8 +464,7 @@ def export_to_csv(df: pd.DataFrame) -> str:
 def render_sidebar():
     """Render sidebar with navigation and info"""
     with st.sidebar:
-        #st.image("https://via.placeholder.com/200x80/667eea/ffffff?text=CONSO2B", 
-        #       use_container_width=True)
+        st.image("assets/my_logo.png", use_container_width=True)
         
         st.markdown("---")
         
@@ -482,6 +481,67 @@ def render_sidebar():
             if st.button(label, key=f"nav_{key}", use_container_width=True):
                 st.session_state.page = key
                 st.rerun()
+        
+        st.markdown("---")
+        
+        # Status indicators
+        st.markdown("### 📊 Status")
+        st.metric("Files Loaded", len(st.session_state.files_data))
+        st.metric("Sheets Available", len(st.session_state.all_sheets))
+        st.metric("Sheets Selected", len(st.session_state.selected_sheets))
+        
+        if st.session_state.consolidated_df is not None:
+            st.metric("Total Rows", len(st.session_state.consolidated_df))
+        
+        st.markdown("---")
+        
+        # Help section
+        with st.expander("ℹ️ About XLMERGE"):
+            st.markdown("""
+            **XLMERGE** consolidates GSTR 2B data from multiple files into one.
+            
+            **Features:**
+            - Smart header detection
+            - Multi-file processing
+            - Data cleaning & validation
+            - Flexible export options
+            
+            **Supported Formats:**
+            - Excel (.xls, .xlsx, .xlsm, .xlsb)
+            - CSV (.csv)
+            """)
+
+        # --- NEW USER GUIDE SECTION ---
+        with st.expander("📖 User Guide"):
+            st.markdown("""
+            **1. Upload Files:**
+            Select one or more of your monthly or quarterly GSTR-2B files. The data will be consolidated in the order you upload them.
+
+            **2. Extract & Select Sheets:**
+            Click **`Extract Sheet Names`**, then **`Next: Select Sheets →`**. Choose the sheets you want to merge and click **`Next: Consolidate →`**.
+
+            **3. Consolidate & Customize:**
+            Click **`🔄 Start Consolidation`**. After processing, select the specific columns you want in your final report.
+
+            **4. Download Your Report:**
+            Choose your export format. By default, data is combined into a single sheet. To create separate worksheets for each original sheet name, check the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
+            """)
+        
+        # --- NEW CREATORS SECTION ---
+        with st.expander("👥 Creators"):
+            st.markdown("""
+            - **Created by:** Nandeesh B
+            - **Guidance:** CA Rajashekaran
+            """)
+
+        st.markdown("---")
+        
+        # Reset button
+        if st.button("🔄 Reset All", type="secondary", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            init_session_state()
+            st.rerun()
         
         st.markdown("---")
         
@@ -1056,3 +1116,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
