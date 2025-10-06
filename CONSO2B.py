@@ -810,7 +810,7 @@ def page_consolidate():
         with col2:
             split_by_sheet = st.checkbox(
                 "📑 Split data by sheet",
-                value=False,
+                value=True,
                 help="Create separate worksheets for each sheet (Excel only)"
             )
         
@@ -932,5 +932,6 @@ def main():
 # ============================================================================
 if __name__ == "__main__":
     main()
+
 
 
