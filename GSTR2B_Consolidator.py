@@ -10,7 +10,7 @@ import traceback
 # PAGE CONFIGURATION
 # ============================================================================
 st.set_page_config(
-    page_title="GSTR2B Consolidator Tool",
+    page_title="CONSO2B Tool",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -464,7 +464,7 @@ def export_to_csv(df: pd.DataFrame) -> str:
 def render_sidebar():
     """Render sidebar with navigation and info"""
     with st.sidebar:
-        #st.image("https://via.placeholder.com/200x80/667eea/ffffff?text=GSTR2B Consolidator", 
+        #st.image("https://via.placeholder.com/200x80/667eea/ffffff?text=CONSO2B", 
         #       use_container_width=True)
         
         st.markdown("---")
@@ -497,9 +497,9 @@ def render_sidebar():
         st.markdown("---")
         
         # Help section
-        with st.expander("ℹ️ About GSTR2B Consolidator"):
+        with st.expander("ℹ️ About CONSO2B"):
             st.markdown("""
-            **GSTR2B Consolidator** consolidates GSTR 2B data from multiple files into one.
+            **CONSO2B** consolidates GSTR 2B data from multiple files into one.
             
             **Features:**
             - Smart header detection
@@ -1017,7 +1017,7 @@ def main():
     
     with col1:
         st.markdown("""
-        # 📊 GSTR2B Consolidator
+        # 📊 CONSO2B
         ### GSTR 2B Data Consolidation Tool
         """)
     
@@ -1054,4 +1054,5 @@ def main():
 # RUN APPLICATION
 # ============================================================================
 if __name__ == "__main__":
+
     main()
