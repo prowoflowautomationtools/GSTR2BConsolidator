@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from io import BytesIO
-from typing import List, Dict, Optional
+from typing import List, Dict, Tuple, Optional
 import traceback
 
 # ============================================================================
@@ -187,8 +187,10 @@ def make_unique_columns(cols: List) -> List[str]:
     unique_cols = []
     
     for idx, col in enumerate(cols):
+        # Sanitize the column name
         clean_col = sanitize_column_name(col, idx)
         
+        # Make it unique if duplicate
         if clean_col not in seen:
             seen[clean_col] = 0
             unique_cols.append(clean_col)
@@ -202,10 +204,17 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
     Clean dataframe by removing empty rows/columns and filling NaN values
     """
+    # Remove completely empty rows and columns
     df = df.dropna(axis=0, how='all')
     df = df.dropna(axis=1, how='all')
+    
+    # Fill remaining NaN with '-'
     df = df.fillna('-')
+    
+    # Reset index
     df = df.reset_index(drop=True)
+    
+    # Clean column names
     df.columns = make_unique_columns(df.columns)
     
     return df
@@ -215,7 +224,8 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 # ============================================================================
 def check_two_row_header(df: pd.DataFrame) -> Optional[pd.DataFrame]:
     """
-    Check if rows 5 and 6 contain multi-level headers and merge them if found
+    Check if rows 5 and 6 contain multi-level headers (Invoice/Tax details)
+    and merge them if found
     """
     if df.shape[0] < 6:
         return None
@@ -224,6 +234,7 @@ def check_two_row_header(df: pd.DataFrame) -> Optional[pd.DataFrame]:
         row4 = df.iloc[4].fillna("")
         row5 = df.iloc[5].fillna("")
         
+        # Convert to strings and check for markers
         row4_texts = [str(x).lower() for x in row4]
         marker_found = any("invoice details" in t or "tax details" in t for t in row4_texts)
         
@@ -233,6 +244,7 @@ def check_two_row_header(df: pd.DataFrame) -> Optional[pd.DataFrame]:
                 main = sanitize_column_name(row4.iloc[i], i)
                 sub = sanitize_column_name(row5.iloc[i], i)
                 
+                # Create combined header
                 if main and sub and main != f"Column_{i}" and sub != f"Column_{i}":
                     combined_headers.append(f"{main}_{sub}")
                 elif main and main != f"Column_{i}":
@@ -242,6 +254,7 @@ def check_two_row_header(df: pd.DataFrame) -> Optional[pd.DataFrame]:
                 else:
                     combined_headers.append(f"Column_{i}")
             
+            # Create new dataframe starting from row 7
             df_new = df.iloc[6:].copy()
             df_new.columns = make_unique_columns(combined_headers)
             df_new = clean_dataframe(df_new)
@@ -258,7 +271,7 @@ def find_header_row(df: pd.DataFrame, search_text: str = "GSTIN of supplier") ->
     Find the row containing the header by searching for a specific text
     """
     try:
-        for idx in range(min(20, len(df))):
+        for idx in range(min(20, len(df))):  # Search first 20 rows only
             row = df.iloc[idx]
             for cell in row:
                 if pd.notna(cell) and search_text.lower() in str(cell).lower():
@@ -279,20 +292,24 @@ def read_file_with_header(file_content: bytes, sheet_name: Optional[str],
     ext = os.path.splitext(file_name)[1].lower()
     
     try:
+        # Read file without header first
         if ext in CSV_EXTENSIONS:
             df_raw = pd.read_csv(BytesIO(file_content), header=None, dtype=str, 
-                                 encoding='utf-8', on_bad_lines='skip')
+                                encoding='utf-8', on_bad_lines='skip')
         else:
             df_raw = pd.read_excel(BytesIO(file_content), sheet_name=sheet_name, 
-                                   header=None, dtype=str)
+                                  header=None, dtype=str)
         
+        # Try two-row header detection first
         df_processed = check_two_row_header(df_raw)
         if df_processed is not None:
             add_log(f"Detected two-row header in {file_name}", "success")
             return df_processed
         
+        # Try to find standard header row
         header_idx = find_header_row(df_raw)
         if header_idx is not None:
+            # Extract header and data
             headers = df_raw.iloc[header_idx].tolist()
             headers = make_unique_columns(headers)
             
@@ -303,9 +320,10 @@ def read_file_with_header(file_content: bytes, sheet_name: Optional[str],
             add_log(f"Found header at row {header_idx + 1} in {file_name}", "success")
             return df
         
+        # If no special header found, read normally
         if ext in CSV_EXTENSIONS:
             df = pd.read_csv(BytesIO(file_content), dtype=str, encoding='utf-8', 
-                             on_bad_lines='skip')
+                           on_bad_lines='skip')
         else:
             df = pd.read_excel(BytesIO(file_content), sheet_name=sheet_name, dtype=str)
         
@@ -320,7 +338,7 @@ def read_file_with_header(file_content: bytes, sheet_name: Optional[str],
 
 def get_sheet_names(file_content: bytes, file_name: str) -> List[str]:
     """
-    Get list of sheet names from an Excel file or return ['CSV'] for a CSV file
+    Get list of sheet names from Excel file or return ['CSV'] for CSV files
     """
     ext = os.path.splitext(file_name)[1].lower()
     
@@ -351,6 +369,9 @@ def consolidate_data(files_data: List[Dict], selected_sheets: List[str]) -> pd.D
     for file_data in files_data:
         file_name = file_data['name']
         file_content = file_data['content']
+        ext = os.path.splitext(file_name)[1].lower()
+        
+        # Get available sheets for this file
         available_sheets = get_sheet_names(file_content, file_name)
         
         for sheet_name in selected_sheets:
@@ -359,16 +380,20 @@ def consolidate_data(files_data: List[Dict], selected_sheets: List[str]) -> pd.D
             progress_bar.progress(progress)
             status_text.text(f"Processing: {file_name} - {sheet_name}")
             
+            # Check if sheet exists in this file
             if sheet_name not in available_sheets:
                 add_log(f"Sheet '{sheet_name}' not found in {file_name}", "warning")
                 continue
             
             try:
+                # Read the sheet
                 df = read_file_with_header(file_content, sheet_name, file_name)
                 
                 if df is not None and not df.empty:
+                    # Add metadata columns
                     df.insert(0, 'SourceFile', file_name)
                     df.insert(1, 'SheetName', sheet_name)
+                    
                     all_dataframes.append(df)
                     add_log(f"✓ Loaded {file_name} - {sheet_name}: {len(df)} rows", "success")
                 else:
@@ -384,7 +409,10 @@ def consolidate_data(files_data: List[Dict], selected_sheets: List[str]) -> pd.D
     if not all_dataframes:
         raise Exception("No data could be loaded from the selected files and sheets")
     
+    # Concatenate all dataframes
     consolidated = pd.concat(all_dataframes, ignore_index=True, sort=False)
+    
+    # Fill any NaN created during concatenation
     consolidated = consolidated.fillna('-')
     
     add_log(f"✓ Consolidation complete: {len(consolidated)} total rows", "success")
@@ -403,14 +431,18 @@ def export_to_excel(df: pd.DataFrame, split_by_sheet: bool = False) -> BytesIO:
     try:
         if split_by_sheet and 'SheetName' in df.columns:
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                # Group by SheetName and write to separate sheets
                 for sheet_name, group_df in df.groupby('SheetName'):
-                    safe_sheet_name = str(sheet_name)[:31].replace('/', '_').replace('\\', '_')
+                    # Sanitize sheet name (Excel has 31 char limit)
+                    safe_sheet_name = str(sheet_name)[:31]
+                    safe_sheet_name = safe_sheet_name.replace('/', '_').replace('\\', '_')
+                    
                     group_df.to_excel(writer, sheet_name=safe_sheet_name, 
-                                      index=False, freeze_panes=(1, 0))
+                                    index=False, freeze_panes=(1, 0))
         else:
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Consolidated', 
-                            index=False, freeze_panes=(1, 0))
+                          index=False, freeze_panes=(1, 0))
         
         output.seek(0)
         return output
@@ -432,16 +464,20 @@ def export_to_csv(df: pd.DataFrame) -> str:
 def render_sidebar():
     """Render sidebar with navigation and info"""
     with st.sidebar:
+        # Assuming you have an image at "assets/my_logo.png"
         #st.image("assets/my_logo.png", use_container_width=True)
         
         st.markdown("---")
         
+        # Navigation
         st.markdown("### 📋 Navigation")
+        
         pages = {
             'upload': '📁 Upload Files',
             'sheets': '📋 Select Sheets',
             'consolidate': '🔄 Consolidate & Export'
         }
+        
         for key, label in pages.items():
             if st.button(label, key=f"nav_{key}", use_container_width=True):
                 st.session_state.page = key
@@ -449,15 +485,18 @@ def render_sidebar():
         
         st.markdown("---")
         
+        # Status indicators
         st.markdown("### 📊 Status")
         st.metric("Files Loaded", len(st.session_state.files_data))
         st.metric("Sheets Available", len(st.session_state.all_sheets))
         st.metric("Sheets Selected", len(st.session_state.selected_sheets))
+        
         if st.session_state.consolidated_df is not None:
             st.metric("Total Rows", len(st.session_state.consolidated_df))
         
         st.markdown("---")
         
+        # Help section
         with st.expander("ℹ️ About CONSO2B"):
             st.markdown("""
             **CONSO2B** consolidates GSTR 2B data from multiple files into one.
@@ -473,6 +512,7 @@ def render_sidebar():
             - CSV (.csv)
             """)
 
+        # User Guide Section
         with st.expander("📖 User Guide"):
             st.markdown("""
             **1. Upload Files:**
@@ -485,9 +525,10 @@ def render_sidebar():
             Click **`🔄 Start Consolidation`**. After processing, select the specific columns you want in your final report.
 
             **4. Download Your Report:**
-            Choose your export format. By default, data is combined into a single sheet. To create separate worksheets for each original sheet name, check the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
+            Choose your export format. To create separate worksheets for each original sheet name, check the **`Split data by sheet`** box. Finally, click **`📥 Generate Export File`**.
             """)
         
+        # Creators Section
         with st.expander("👥 Creators"):
             st.markdown("""
             - **Created by:** Nandeesh B
@@ -496,11 +537,45 @@ def render_sidebar():
 
         st.markdown("---")
         
+        # Reset button with a unique key
         if st.button("🔄 Reset All", type="secondary", use_container_width=True, key="reset_all_sidebar"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             init_session_state()
             st.rerun()
+        
+        st.markdown("---")
+        
+        # Status indicators
+        st.markdown("### 📊 Status")
+        st.metric("Files Loaded", len(st.session_state.files_data))
+        st.metric("Sheets Available", len(st.session_state.all_sheets))
+        st.metric("Sheets Selected", len(st.session_state.selected_sheets))
+        
+        if st.session_state.consolidated_df is not None:
+            st.metric("Total Rows", len(st.session_state.consolidated_df))
+        
+        st.markdown("---")
+        
+        # Help section
+        with st.expander("ℹ️ About CONSO2B"):
+            st.markdown("""
+            **CONSO2B** consolidates GSTR 2B data from multiple files into one.
+            
+            **Features:**
+            - Smart header detection
+            - Multi-file processing
+            - Data cleaning & validation
+            - Flexible export options
+            
+            **Supported Formats:**
+            - Excel (.xls, .xlsx, .xlsm, .xlsb)
+            - CSV (.csv)
+            """)
+        
+        st.markdown("---")
+        
+       
 
 # ============================================================================
 # PAGE 1: UPLOAD FILES
@@ -513,13 +588,14 @@ def page_upload():
     st.markdown("""
     **Step 1: Upload your GSTR 2B files**
     
-    - Select one or more Excel or CSV files.
-    - Files can be from different tax periods.
-    - Upload files in the desired order for consolidation.
-    - All supported formats will be processed.
+    - Select one or more Excel or CSV files
+    - Files can be from different tax periods
+    - Upload the files in order to get the GSTR2B Conso in order
+    - All supported formats will be processed
     """)
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # File uploader
     uploaded_files = st.file_uploader(
         "Drop files here or click to browse",
         type=['xls', 'xlsx', 'xlsm', 'xlsb', 'csv'],
@@ -528,44 +604,59 @@ def page_upload():
     )
     
     if uploaded_files:
+        # Process uploaded files
         st.session_state.files_data = []
+        
         for file in uploaded_files:
-            st.session_state.files_data.append({
+            file_data = {
                 'name': file.name,
                 'content': file.read(),
                 'size': file.size,
                 'type': file.type
-            })
+            }
+            st.session_state.files_data.append(file_data)
         
+        # Display uploaded files
         st.markdown("---")
         st.subheader(f"📂 Uploaded Files ({len(st.session_state.files_data)})")
         
         for idx, file_data in enumerate(st.session_state.files_data):
-            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
-            with col1:
-                st.markdown(f"**{idx + 1}. {file_data['name']}**")
-            with col2:
-                size_kb = file_data['size'] / 1024
-                size_str = f"{size_kb:.1f} KB" if size_kb < 1024 else f"{size_kb/1024:.1f} MB"
-                st.text(size_str)
-            with col3:
-                st.text(os.path.splitext(file_data['name'])[1].upper())
-            with col4:
-                if st.button("🗑️", key=f"delete_{idx}"):
-                    st.session_state.files_data.pop(idx)
-                    st.rerun()
+            with st.container():
+                col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                
+                with col1:
+                    st.markdown(f"**{idx + 1}. {file_data['name']}**")
+                
+                with col2:
+                    size_kb = file_data['size'] / 1024
+                    size_str = f"{size_kb:.1f} KB" if size_kb < 1024 else f"{size_kb/1024:.1f} MB"
+                    st.text(size_str)
+                
+                with col3:
+                    ext = os.path.splitext(file_data['name'])[1].upper()
+                    st.text(ext)
+                
+                with col4:
+                    if st.button("🗑️", key=f"delete_{idx}"):
+                        st.session_state.files_data.pop(idx)
+                        st.rerun()
         
         st.markdown("---")
         
+        # Action buttons
         col1, col2 = st.columns(2)
+        
         with col1:
-            if st.button("📋 Extract Sheet Names", type="primary", use_container_width=True):
+            if st.button("📋 Extract Sheet Names", type="primary", 
+                        use_container_width=True):
                 try:
                     with st.spinner("Analyzing files..."):
                         all_sheets = set()
                         file_sheet_map = {}
+                        
                         for file_data in st.session_state.files_data:
-                            sheets = get_sheet_names(file_data['content'], file_data['name'])
+                            sheets = get_sheet_names(file_data['content'], 
+                                                    file_data['name'])
                             all_sheets.update(sheets)
                             file_sheet_map[file_data['name']] = sheets
                         
@@ -575,6 +666,7 @@ def page_upload():
                         
                         st.success(f"✅ Found {len(st.session_state.all_sheets)} unique sheet(s)")
                         st.balloons()
+                        
                 except Exception as e:
                     st.error(f"❌ Error analyzing files: {str(e)}")
         
@@ -583,6 +675,7 @@ def page_upload():
                 if st.button("Next: Select Sheets →", use_container_width=True):
                     st.session_state.page = 'sheets'
                     st.rerun()
+    
     else:
         st.info("👆 Upload files to begin")
 
@@ -591,6 +684,7 @@ def page_upload():
 # ============================================================================
 def page_sheets():
     """Sheet selection page"""
+    
     if not st.session_state.files_data:
         st.warning("⚠️ Please upload files first")
         if st.button("← Go to Upload"):
@@ -611,21 +705,25 @@ def page_sheets():
     st.markdown("""
     **Step 2: Choose which sheets to include**
     
-    - Select sheets that contain the data you want to consolidate.
-    - Only selected sheets will be processed.
-    - Sheet availability varies by file.
+    - Select sheets that contain the data you want to consolidate
+    - Only selected sheets will be processed
+    - Sheet availability varies by file
     """)
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # Quick selection buttons
     col1, col2, col3 = st.columns(3)
+    
     with col1:
         if st.button("✅ Select All", use_container_width=True):
             st.session_state.selected_sheets = st.session_state.all_sheets.copy()
             st.rerun()
+    
     with col2:
         if st.button("❌ Deselect All", use_container_width=True):
             st.session_state.selected_sheets = []
             st.rerun()
+    
     with col3:
         if st.button("🔄 Reset Selection", use_container_width=True):
             st.session_state.selected_sheets = []
@@ -633,21 +731,25 @@ def page_sheets():
     
     st.markdown("---")
     
+    # Display sheets with file availability
     st.subheader("Available Sheets")
     
+    # Initialize selected sheets if empty
     if not st.session_state.selected_sheets:
         st.session_state.selected_sheets = []
     
+    # Create two columns for sheet display
     col1, col2 = st.columns(2)
-    all_sheets_list = st.session_state.all_sheets
-    for idx, sheet_name in enumerate(all_sheets_list):
-        file_count = sum(1 for files in st.session_state.file_sheet_mapping.values() if sheet_name in files)
+    
+    for idx, sheet_name in enumerate(st.session_state.all_sheets):
+        # Count how many files have this sheet
+        file_count = sum(1 for files in st.session_state.file_sheet_mapping.values() 
+                        if sheet_name in files)
         
-        target_col = col1 if idx % 2 == 0 else col2
-        with target_col:
+        with col1 if idx % 2 == 0 else col2:
             is_selected = st.checkbox(
                 f"{sheet_name} ({file_count} file{'s' if file_count != 1 else ''})",
-                value=(sheet_name in st.session_state.selected_sheets),
+                value=sheet_name in st.session_state.selected_sheets,
                 key=f"sheet_{idx}_{sheet_name}"
             )
             
@@ -658,26 +760,32 @@ def page_sheets():
     
     st.markdown("---")
     
+    # Summary and navigation
     st.info(f"**Selected: {len(st.session_state.selected_sheets)} / {len(st.session_state.all_sheets)} sheets**")
     
     col1, col2 = st.columns(2)
+    
     with col1:
         if st.button("← Back to Upload", use_container_width=True):
             st.session_state.page = 'upload'
             st.rerun()
+    
     with col2:
         if len(st.session_state.selected_sheets) > 0:
-            if st.button("Next: Consolidate →", type="primary", use_container_width=True):
+            if st.button("Next: Consolidate →", type="primary", 
+                        use_container_width=True):
                 st.session_state.page = 'consolidate'
                 st.rerun()
         else:
-            st.button("Select at least one sheet", disabled=True, use_container_width=True)
+            st.button("Select at least one sheet", disabled=True, 
+                     use_container_width=True)
 
 # ============================================================================
 # PAGE 3: CONSOLIDATE & EXPORT
 # ============================================================================
 def page_consolidate():
     """Consolidation and export page"""
+    
     if not st.session_state.files_data:
         st.warning("⚠️ Please upload files first")
         if st.button("← Go to Upload"):
@@ -698,68 +806,93 @@ def page_consolidate():
     st.markdown("""
     **Step 3: Process and export your data**
     
-    - Click Consolidate to merge all selected data.
-    - Review the consolidated data.
-    - Choose columns to export.
-    - Download in your preferred format.
+    - Click Consolidate to merge all selected data
+    - Review the consolidated data
+    - Choose columns to export
+    - Download in your preferred format
     """)
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # Consolidate button
     if st.button("🔄 Start Consolidation", type="primary", use_container_width=True):
         clear_logs()
+        
         try:
             with st.spinner("Processing files..."):
                 consolidated = consolidate_data(
                     st.session_state.files_data,
                     st.session_state.selected_sheets
                 )
+                
                 st.session_state.consolidated_df = consolidated
+                # Default to only the essential columns being selected
                 st.session_state.selected_columns = ['SourceFile', 'SheetName']
+                
             st.success("✅ Consolidation completed successfully!")
             st.balloons()
+            
         except Exception as e:
             st.error(f"❌ Consolidation failed: {str(e)}")
             add_log(f"Consolidation error: {str(e)}", "error")
     
+    # Show logs if available
     if st.session_state.processing_logs:
         with st.expander("📋 Processing Log", expanded=False):
             for log in st.session_state.processing_logs:
                 st.text(log)
     
+    # If data is consolidated, show preview and export options
     if st.session_state.consolidated_df is not None:
         df = st.session_state.consolidated_df
         
         st.markdown("---")
         st.markdown("### 📊 Consolidated Data Summary")
         
+        # Metrics
         col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
             st.metric("Total Rows", f"{len(df):,}")
+        
         with col2:
             st.metric("Total Columns", len(df.columns))
+        
         with col3:
             unique_sheets = df['SheetName'].nunique() if 'SheetName' in df.columns else 0
             st.metric("Unique Sheets", unique_sheets)
+        
         with col4:
             memory_mb = df.memory_usage(deep=True).sum() / 1024 / 1024
             st.metric("Memory Usage", f"{memory_mb:.2f} MB")
         
+        # Data Preview
         st.markdown("---")
         st.markdown("### 👁️ Data Preview (First 20 rows)")
-        st.dataframe(df.head(20), use_container_width=True, height=400)
         
+        preview_df = df.head(20).copy()
+        st.dataframe(
+            preview_df,
+            use_container_width=True,
+            height=400
+        )
+        
+        # Column Selection
         st.markdown("---")
         st.markdown("### 🎯 Select Columns to Export")
         
         col1, col2, col3 = st.columns(3)
+        
         with col1:
             if st.button("✅ Select All Columns", use_container_width=True):
                 st.session_state.selected_columns = list(df.columns)
                 st.rerun()
+        
         with col2:
             if st.button("❌ Deselect All", use_container_width=True):
+                # Keep SourceFile and SheetName always selected
                 st.session_state.selected_columns = ['SourceFile', 'SheetName']
                 st.rerun()
+        
         with col3:
             if st.button("🔄 Reset to Default", use_container_width=True):
                 st.session_state.selected_columns = ['SourceFile', 'SheetName']
@@ -767,65 +900,90 @@ def page_consolidate():
         
         st.markdown("---")
         
+        # Display columns in a grid
         all_columns = list(df.columns)
+        
+        # Calculate number of rows needed (4 columns per row)
         cols_per_row = 4
         num_rows = (len(all_columns) + cols_per_row - 1) // cols_per_row
         
         for row in range(num_rows):
             cols = st.columns(cols_per_row)
+            
             for col_idx in range(cols_per_row):
                 list_idx = row * cols_per_row + col_idx
+                
                 if list_idx < len(all_columns):
                     col_name = all_columns[list_idx]
+                    
                     with cols[col_idx]:
+                        # Force SourceFile and SheetName to always be selected
                         if col_name in ['SourceFile', 'SheetName']:
-                            st.checkbox(
-                                f"🔒 {col_name}", value=True, disabled=True,
-                                key=f"col_{list_idx}", help="This column is always included"
+                            is_selected = st.checkbox(
+                                f"🔒 {col_name}",
+                                value=True,
+                                disabled=True,
+                                key=f"col_{list_idx}",
+                                help="This column is always included"
                             )
                         else:
                             is_selected = st.checkbox(
                                 col_name,
-                                value=(col_name in st.session_state.selected_columns),
+                                value=col_name in st.session_state.selected_columns,
                                 key=f"col_{list_idx}"
                             )
-                            if is_selected and col_name not in st.session_state.selected_columns:
-                                st.session_state.selected_columns.append(col_name)
-                            elif not is_selected and col_name in st.session_state.selected_columns:
+                        
+                        # Update selected columns
+                        if is_selected and col_name not in st.session_state.selected_columns:
+                            st.session_state.selected_columns.append(col_name)
+                        elif not is_selected and col_name in st.session_state.selected_columns:
+                            if col_name not in ['SourceFile', 'SheetName']:
                                 st.session_state.selected_columns.remove(col_name)
         
         st.markdown("---")
         st.info(f"**Selected Columns: {len(st.session_state.selected_columns)} / {len(all_columns)}**")
         
+        # Export Section
         st.markdown("---")
         st.markdown("### 💾 Export Options")
         
         col1, col2 = st.columns(2)
+        
         with col1:
             export_format = st.selectbox(
                 "Select Export Format",
                 ["Excel (XLSX)", "Excel (XLS)", "CSV"],
                 help="Choose the format for your exported file"
             )
+        
         with col2:
             split_by_sheet = st.checkbox(
                 "📑 Split data by sheet",
-                value=False,
+                value=True,
                 help="Create separate worksheets for each sheet (Excel only)"
             )
         
+        # Preview export data
         if len(st.session_state.selected_columns) > 0:
+            # Get the original column order from the main dataframe
             original_order = list(df.columns)
+            # Create a new list of selected columns that respects the original order
             ordered_selection = [col for col in original_order if col in st.session_state.selected_columns]
+
             export_df = df[ordered_selection].copy()
+            
             
             st.markdown("---")
             
+            # Export button
             if st.button("📥 Generate Export File", type="primary", use_container_width=True):
                 try:
                     with st.spinner("Generating file..."):
+                        
                         if "Excel" in export_format:
+                            # Export to Excel
                             output = export_to_excel(export_df, split_by_sheet)
+                            
                             file_ext = "xlsx" if "XLSX" in export_format else "xls"
                             file_name = f"consolidated_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.{file_ext}"
                             mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -837,9 +995,12 @@ def page_consolidate():
                                 mime=mime_type,
                                 use_container_width=True
                             )
+                            
                         else:
+                            # Export to CSV
                             csv_data = export_to_csv(export_df)
                             file_name = f"consolidated_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            
                             st.download_button(
                                 label="⬇️ Download CSV File",
                                 data=csv_data,
@@ -847,37 +1008,47 @@ def page_consolidate():
                                 mime="text/csv",
                                 use_container_width=True
                             )
+                        
                         st.success("✅ File ready for download!")
+                        
                 except Exception as e:
                     st.error(f"❌ Export failed: {str(e)}")
+        
         else:
             st.warning("⚠️ Please select at least one column to export")
         
+        # Additional Info
         st.markdown("---")
         st.markdown("### 📝 Export Notes")
+        
         st.markdown('<div class="info-box">', unsafe_allow_html=True)
         st.markdown("""
         **Important Information:**
         
-        - **SourceFile** and **SheetName** columns are always included for traceability.
-        - **Split by Sheet** option creates separate worksheets in Excel.
-        - **CSV format** will export all data into a single file.
-        - All empty cells are filled with **'-'** for consistency.
+        - **SourceFile** and **SheetName** columns are always included for traceability
+        - **Split by Sheet** option creates separate worksheets in Excel (one per sheet)
+        - **CSV format** will export all data in a single file
+        - **Date/Time** is added to filename to prevent overwriting
+        - All empty cells are filled with **'-'** for consistency
         """)
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # Navigation
         st.markdown("---")
         col1, col2, col3 = st.columns(3)
+        
         with col1:
             if st.button("← Back to Sheets", use_container_width=True):
                 st.session_state.page = 'sheets'
                 st.rerun()
+        
         with col2:
             if st.button("🔄 Process Again", use_container_width=True):
                 st.session_state.consolidated_df = None
                 st.session_state.selected_columns = []
                 clear_logs()
                 st.rerun()
+        
         with col3:
             if st.button("🏠 Start Over", use_container_width=True):
                 for key in list(st.session_state.keys()):
@@ -890,26 +1061,33 @@ def page_consolidate():
 # ============================================================================
 def main():
     """Main application entry point"""
+    
+    # Initialize session state
     init_session_state()
+    
+    # Render sidebar
     render_sidebar()
     
+    # Main content area with header
     col1, col2 = st.columns([3, 1])
+    
     with col1:
         st.markdown("""
         # 📊 CONSO2B
         ### GSTR 2B Data Consolidation Tool
         """)
+    
     with col2:
         st.markdown("""
         <div style='text-align: right; padding-top: 20px;'>
             <p style='color: #666; font-size: 0.9em;'>
-                Version 1.0
             </p>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("---")
     
+    # Route to appropriate page
     if st.session_state.page == 'upload':
         page_upload()
     elif st.session_state.page == 'sheets':
@@ -920,6 +1098,7 @@ def main():
         st.session_state.page = 'upload'
         st.rerun()
     
+    # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666; padding: 20px;'>
@@ -931,5 +1110,10 @@ def main():
 # RUN APPLICATION
 # ============================================================================
 if __name__ == "__main__":
+
     main()
+
+
+
+
 
