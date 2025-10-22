@@ -617,40 +617,58 @@ def page_sheets():
     """)
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # Add a flag to track if we should update checkboxes based on button clicks
+    if 'sheet_selection_action' not in st.session_state:
+        st.session_state.sheet_selection_action = None
+    
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("✅ Select All", use_container_width=True):
+        if st.button("✅ Select All", use_container_width=True, key="select_all_btn"):
             st.session_state.selected_sheets = st.session_state.all_sheets.copy()
+            st.session_state.sheet_selection_action = 'select_all'
             st.rerun()
     with col2:
-        if st.button("❌ Deselect All", use_container_width=True):
+        if st.button("❌ Deselect All", use_container_width=True, key="deselect_all_btn"):
             st.session_state.selected_sheets = []
+            st.session_state.sheet_selection_action = 'deselect_all'
             st.rerun()
     with col3:
-        if st.button("🔄 Reset Selection", use_container_width=True):
+        if st.button("🔄 Reset Selection", use_container_width=True, key="reset_selection_btn"):
             st.session_state.selected_sheets = []
+            st.session_state.sheet_selection_action = 'reset'
             st.rerun()
     
     st.markdown("---")
     
     st.subheader("Available Sheets")
     
-    if not st.session_state.selected_sheets:
+    # Ensure selected_sheets is initialized
+    if not hasattr(st.session_state, 'selected_sheets') or st.session_state.selected_sheets is None:
         st.session_state.selected_sheets = []
+    
+    # Reset the action flag after using it
+    if st.session_state.sheet_selection_action:
+        st.session_state.sheet_selection_action = None
     
     col1, col2 = st.columns(2)
     all_sheets_list = st.session_state.all_sheets
+    
     for idx, sheet_name in enumerate(all_sheets_list):
         file_count = sum(1 for files in st.session_state.file_sheet_mapping.values() if sheet_name in files)
         
         target_col = col1 if idx % 2 == 0 else col2
         with target_col:
+            # Check if sheet is currently selected
+            current_selection = sheet_name in st.session_state.selected_sheets
+            
+            # Create checkbox with current state
             is_selected = st.checkbox(
                 f"{sheet_name} ({file_count} file{'s' if file_count != 1 else ''})",
-                value=(sheet_name in st.session_state.selected_sheets),
-                key=f"sheet_{idx}_{sheet_name}"
+                value=current_selection,
+                key=f"sheet_checkbox_{idx}_{sheet_name}"
             )
             
+            # Update selected_sheets based on checkbox state
             if is_selected and sheet_name not in st.session_state.selected_sheets:
                 st.session_state.selected_sheets.append(sheet_name)
             elif not is_selected and sheet_name in st.session_state.selected_sheets:
@@ -932,7 +950,3 @@ def main():
 # ============================================================================
 if __name__ == "__main__":
     main()
-
-
-
-
